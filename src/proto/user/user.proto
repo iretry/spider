@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package user;
+
+service UserService {
+    rpc GetUserList (GetUserListRequest) returns (GetUserCourseResponse);
+}
+
+message GetUserListRequest {
+    string username = 1;
+    int32 id = 2;
+}
+
+message GetUserCourseResponse {
+    bool is_success = 1;
+    string message = 2;
+    UserInfo userinfo = 3;
+}
+
+message UserInfo {
+    uint32 id = 1;
+    string username = 2;
+}
