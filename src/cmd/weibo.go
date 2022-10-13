@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"log"
 	"spider/spider"
+	"strconv"
 )
 
 // serveCmd represents the serve command
@@ -16,7 +18,7 @@ var weiboCmd = &cobra.Command{
 	},
 }
 
-
+var uid string
 
 func init() {
 	rootCmd.AddCommand(weiboCmd)
@@ -30,13 +32,20 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	rootCmd.PersistentFlags().StringVar(&uid, "uid", "0", "uid")
 }
 
-
 func startWeibo() {
+	id, err := strconv.ParseUint(uid, 10, 64)
+	if err != nil {
+		fmt.Println("err:", err)
+		return
+	}
+	url := fmt.Sprintf("https://weibo.com/ajax/statuses/mymblog?uid=%d&page=1&feature=0", id)
 	weibo := spider.Weibo{
-		Url: "https://weibo.com/2970452952/profile?is_hot=1",
-		Id: 2970452952,
+		Url: url,
+		Id:  id,
 	}
 	weibo.Start()
 }

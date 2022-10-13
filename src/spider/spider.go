@@ -40,10 +40,63 @@ type Weibo struct {
 	Url string
 	Id  uint64
 }
-
-type WeiboAjax struct {
-	Url string
-	Id  uint64
+type WeiboResult struct {
+	Data struct {
+		SinceId string `json:"since_id"`
+		List    []struct {
+			Visible struct {
+				Type   int `json:"type"`
+				ListId int `json:"list_id"`
+			} `json:"visible"`
+			CreatedAt string `json:"created_at"`
+			Id        int64  `json:"id"`
+			Idstr     string `json:"idstr"`
+			Mid       string `json:"mid"`
+			Mblogid   string `json:"mblogid"`
+			User      struct {
+				Id              int64  `json:"id"`
+				Idstr           string `json:"idstr"`
+				PcNew           int    `json:"pc_new"`
+				ScreenName      string `json:"screen_name"`
+				ProfileImageUrl string `json:"profile_image_url"`
+				ProfileUrl      string `json:"profile_url"`
+				Verified        bool   `json:"verified"`
+				VerifiedType    int    `json:"verified_type"`
+				Domain          string `json:"domain"`
+				Weihao          string `json:"weihao"`
+				VerifiedTypeExt int    `json:"verified_type_ext"`
+				AvatarLarge     string `json:"avatar_large"`
+				AvatarHd        string `json:"avatar_hd"`
+				FollowMe        bool   `json:"follow_me"`
+				Following       bool   `json:"following"`
+				Mbrank          int    `json:"mbrank"`
+				Mbtype          int    `json:"mbtype"`
+				PlanetVideo     bool   `json:"planet_video"`
+				IconList        []struct {
+					Type string `json:"type"`
+					Data struct {
+						Mbrank int `json:"mbrank"`
+						Mbtype int `json:"mbtype"`
+					} `json:"data"`
+				} `json:"icon_list"`
+			} `json:"user"`
+			CanEdit         bool   `json:"can_edit"`
+			TextRaw         string `json:"text_raw"`
+			Text            string `json:"text"`
+			TextLength      int    `json:"textLength"`
+			Source          string `json:"source"`
+			Favorited       bool   `json:"favorited"`
+			RepostsCount    int    `json:"reposts_count"`
+			CommentsCount   int    `json:"comments_count"`
+			AttitudesCount  int    `json:"attitudes_count"`
+			AttitudesStatus int    `json:"attitudes_status"`
+			IsLongText      bool   `json:"isLongText"`
+			ShareRepostType int    `json:"share_repost_type"`
+			IsTop           int    `json:"isTop"`
+		} `json:"list"`
+		Total int `json:"total"`
+	} `json:"data"`
+	Ok int `json:"ok"`
 }
 
 func (p Joker) Start() uint32 {
@@ -154,7 +207,8 @@ func CreateDateDir(folderPath string) error {
 
 func (p Weibo) Start() uint32 {
 	htmlInfo := p.GetHtml(1)
-	_ = p.ParseHtml(htmlInfo)
+	//_ = p.ParseHtml(htmlInfo)
+	_ = p.ParseJson(htmlInfo)
 	return 1
 }
 
@@ -189,6 +243,102 @@ func (p Weibo) GetHtml(page uint32) io.Reader {
 		log.Fatalf("status code error: %d %s", result.StatusCode, result.Status)
 	}
 	return result.Body
+}
+
+func (p Weibo) ParseJson(content io.Reader) int {
+	weiboResult := WeiboResult{}
+	info, _ := ioutil.ReadAll(content)
+	err := json.Unmarshal(info, &weiboResult)
+	if err != nil {
+		fmt.Println("content:", string(info))
+		fmt.Println("err:", err)
+		return 0
+	}
+	if weiboResult.Ok != 1 {
+
+		fmt.Println("err ok:", weiboResult)
+		return 0
+	}
+	type cacheData struct {
+		Id        int64   `json:"id"`
+		Mid       float64 `json:"mid"`
+		Content   string  `json:"content"`
+		Username  string  `json:"username"`
+		CreatedAt string  `json:"created_at"`
+	}
+	allMid := make([]cacheData, 0)
+	for _, row := range weiboResult.Data.List {
+		rowMid, _ := strconv.ParseFloat(row.Mid, 64)
+
+		tim, _ := time.Parse(time.RubyDate, row.CreatedAt)
+		allMid = append(allMid, cacheData{
+			Id:        row.User.Id,
+			Mid:       rowMid,
+			Content:   row.TextRaw,
+			Username:  row.User.ScreenName,
+			CreatedAt: tim.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	if len(allMid) > 0 {
+		sort.SliceStable(allMid, func(i, j int) bool {
+			return allMid[i].Mid < allMid[j].Mid
+		})
+
+		dir := "./cache"
+		err = CreateDateDir(dir)
+		if err != nil {
+			panic(err)
+		}
+		latestMid := allMid[len(allMid)-1]
+		fileName := strconv.FormatInt(int64(p.Id), 10)
+		filePath := dir + "/" + fileName + ".txt"
+		var f *os.File
+		var con []byte
+		maxMid := cacheData{}
+		if isExist(filePath) {
+			con, err = os.ReadFile(filePath)
+			f, err = os.OpenFile(filePath, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0777)
+			json.Unmarshal(con, &maxMid)
+		} else {
+			f, err = os.Create(filePath)
+		}
+
+		defer f.Close()
+		if err != nil {
+			fmt.Println(err.Error())
+			return 0
+		} else {
+
+			if latestMid.Mid <= maxMid.Mid {
+				latestMid = maxMid
+			} else {
+				fmt.Println(maxMid.Mid)
+				fmt.Println(latestMid.Content)
+				fmt.Println(latestMid.Username)
+				fmt.Println("send")
+				postInfo := JsonPostSample{
+					Msgtype: "text",
+					Text:    "{\"content\":\"【" + latestMid.Username + "】" + latestMid.CreatedAt + "发微博了:" + latestMid.Content + "\"}",
+				}
+				postInfo.SamplePost()
+			}
+			cacheInfo, err := json.Marshal(latestMid)
+			if err != nil {
+				fmt.Println("cacheInfoErr:", err)
+				return 0
+			}
+			fmt.Println(string(cacheInfo))
+			_, err = f.Write(cacheInfo)
+			if err != nil {
+				fmt.Println("WriteErr:", err)
+				return 0
+			}
+		}
+
+	}
+
+	return 1
 }
 
 func (p Weibo) ParseHtml(content io.Reader) int {
@@ -284,4 +434,19 @@ func (postData *JsonPostSample) SamplePost() {
 	//byte数组直接转成string，优化内存
 	str := (*string)(unsafe.Pointer(&respBytes))
 	fmt.Println(*str)
+}
+
+func isExist(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsExist(err) {
+			return true
+		}
+		if os.IsNotExist(err) {
+			return false
+		}
+		fmt.Println(err)
+		return false
+	}
+	return true
 }
