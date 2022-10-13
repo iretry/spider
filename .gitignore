@@ -20,4 +20,4 @@
 conf/*
 
 cache
-main
+src/main
