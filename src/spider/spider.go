@@ -443,7 +443,7 @@ func (postData *JsonPostSample) SamplePost() {
 		return
 	}
 	reader := bytes.NewReader(bytesData)
-	url := "https://oapi.dingtalk.com/robot/send?access_token=c725a8ecd243517e89fce48e5ae7d8d0d22feb5d7e52de22a515cb2656978c91"
+	url := viper.GetString("DingUrl")
 	request, err := http.NewRequest("POST", url, reader)
 	if err != nil {
 		fmt.Println(err.Error())
