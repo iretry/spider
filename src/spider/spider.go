@@ -520,7 +520,7 @@ func fullScreenshot(urlstr string, quality int, res *[]byte) chromedp.Tasks {
 	return chromedp.Tasks{
 		chromedp.Navigate(urlstr),
 		chromedp.Emulate(device.IPhone6),
-		chromedp.Sleep(40 * time.Second),
+		chromedp.WaitVisible(`div[class="weibo-text"]`),
 		chromedp.FullScreenshot(res, quality),
 	}
 }
