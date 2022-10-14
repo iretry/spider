@@ -80,7 +80,7 @@ func startChild() {
 			Msgtype: "markdown",
 			Markdown: spider.Markdown{
 				Title: fmt.Sprintf("孕周:今天是%d周%d天", week, oDay),
-				Text:  "#### " + fmt.Sprintf("今天是%d周%d天", week, oDay) + "\n > 宝宝的变化" + row.Child + "\n\n > 妈妈的变化" + row.Mom,
+				Text:  "#### " + fmt.Sprintf("今天是%d周%d天", week, oDay) + "\n > 宝宝的变化：" + row.Child + "\n\n > 妈妈的变化：" + row.Mom,
 			},
 		}
 		postInfo.SamplePost()
