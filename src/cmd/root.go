@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -28,32 +28,22 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (must set)")
+	rootCmd.MarkPersistentFlagRequired("config")
 	cobra.OnInitialize(initConfig)
-
-	//
-	//rootCmd.AddCommand(addCmd)
-	//rootCmd.AddCommand(initCmd)//
 }
 
 func initConfig() {
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		// Search config in home directory with name ".cobra" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".cobra")
 	}
 
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err == nil {
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalln("configErr:", err)
+	} else {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
 }

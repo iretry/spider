@@ -2,9 +2,13 @@ package spider
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/device"
+	"github.com/spf13/viper"
 	"golang.org/x/net/publicsuffix"
 	"io"
 	"io/ioutil"
@@ -37,8 +41,10 @@ type Joker struct {
 }
 
 type Weibo struct {
-	Url string
-	Id  uint64
+	Url     string
+	Id      uint64
+	ShotUrl string
+	Path    string
 }
 type WeiboResult struct {
 	Data struct {
@@ -199,7 +205,7 @@ func download(path string, c chan bool) {
 func CreateDateDir(folderPath string) error {
 	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
 		// 必须分成两步：先创建文件夹、再修改权限
-		err := os.Mkdir(folderPath, os.ModePerm) //0777也可以os.ModePerm
+		err := os.MkdirAll(folderPath, os.ModePerm) //0777也可以os.ModePerm
 		return err
 	}
 	return nil
@@ -265,6 +271,7 @@ func (p Weibo) ParseJson(content io.Reader) int {
 		Content   string  `json:"content"`
 		Username  string  `json:"username"`
 		CreatedAt string  `json:"created_at"`
+		Path      string  `json:"path"`
 	}
 	allMid := make([]cacheData, 0)
 	for _, row := range weiboResult.Data.List {
@@ -285,7 +292,7 @@ func (p Weibo) ParseJson(content io.Reader) int {
 			return allMid[i].Mid < allMid[j].Mid
 		})
 
-		dir := "./cache"
+		dir := p.Path
 		err = CreateDateDir(dir)
 		if err != nil {
 			panic(err)
@@ -317,9 +324,27 @@ func (p Weibo) ParseJson(content io.Reader) int {
 				fmt.Println(latestMid.Content)
 				fmt.Println(latestMid.Username)
 				fmt.Println("send")
+
+				//截个图
+				shotDir := time.Now().Format("20060102")
+				dir := p.Path + "/shot/" + shotDir + "/"
+				err := CreateDateDir(dir)
+				if err != nil {
+					fmt.Println("err:", err)
+					return 0
+				}
+				shotFileName := fmt.Sprintf("/%d-%s.png", p.Id, time.Now().Format("20060102150405"))
+				path := dir + shotFileName
+				p.ScreenShot(path, p.ShotUrl)
+				latestMid.Path = shotFileName
+				fileUrl := viper.GetString("fileBaseUrl") + "/" + shotDir + shotFileName
+				msg := "### " + latestMid.Username + "\n>" + latestMid.Content + "\n![screenshot](" + fileUrl + ")"
 				postInfo := JsonPostSample{
-					Msgtype: "text",
-					Text:    "{\"content\":\"【" + latestMid.Username + "】" + latestMid.CreatedAt + "发微博了:" + latestMid.Content + "\"}",
+					Msgtype: "markdown",
+					Markdown: Markdown{
+						Title: latestMid.Username,
+						Text:  msg,
+					},
 				}
 				postInfo.SamplePost()
 			}
@@ -402,8 +427,13 @@ func (p Weibo) ParseHtml(content io.Reader) int {
 }
 
 type JsonPostSample struct {
-	Msgtype string `json:"msgtype"`
-	Text    string `json:"text"`
+	Msgtype  string   `json:"msgtype"`
+	Markdown Markdown `json:"markdown"`
+}
+
+type Markdown struct {
+	Title string `json:"title"`
+	Text  string `json:"text"`
 }
 
 func (postData *JsonPostSample) SamplePost() {
@@ -449,4 +479,48 @@ func isExist(path string) bool {
 		return false
 	}
 	return true
+}
+
+func (p Weibo) ScreenShot(path string, url string) int {
+	// create context
+	ctx, cancel := chromedp.NewContext(
+		context.Background(),
+		// chromedp.WithDebugf(log.Printf),
+	)
+	defer cancel()
+
+	// capture screenshot of an element
+	var buf []byte
+
+	// capture entire browser viewport, returning png with quality=90
+	if err := chromedp.Run(ctx, fullScreenshot(url, 80, &buf)); err != nil {
+		log.Fatal(err)
+	}
+	if err := ioutil.WriteFile(path, buf, 0o644); err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("wrote elementScreenshot.png and fullScreenshot.png")
+	return 1
+}
+
+// elementScreenshot takes a screenshot of a specific element.
+func elementScreenshot(urlstr, sel string, res *[]byte) chromedp.Tasks {
+	return chromedp.Tasks{
+		chromedp.Navigate(urlstr),
+		chromedp.Screenshot(sel, res, chromedp.NodeVisible),
+	}
+}
+
+// fullScreenshot takes a screenshot of the entire browser viewport.
+//
+// Note: chromedp.FullScreenshot overrides the device's emulation settings. Use
+// device.Reset to reset the emulation and viewport settings.
+func fullScreenshot(urlstr string, quality int, res *[]byte) chromedp.Tasks {
+	return chromedp.Tasks{
+		chromedp.Navigate(urlstr),
+		chromedp.Emulate(device.IPhone6),
+		chromedp.Sleep(10 * time.Second),
+		chromedp.FullScreenshot(res, quality),
+	}
 }

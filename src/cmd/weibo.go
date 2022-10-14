@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"log"
 	"spider/spider"
 	"strconv"
@@ -34,6 +35,7 @@ func init() {
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
 	rootCmd.PersistentFlags().StringVar(&uid, "uid", "0", "uid")
+
 }
 
 func startWeibo() {
@@ -42,10 +44,13 @@ func startWeibo() {
 		fmt.Println("err:", err)
 		return
 	}
+
 	url := fmt.Sprintf("https://weibo.com/ajax/statuses/mymblog?uid=%d&page=1&feature=0", id)
 	weibo := spider.Weibo{
-		Url: url,
-		Id:  id,
+		Url:     url,
+		Id:      id,
+		ShotUrl: fmt.Sprintf("https://weibo.com/%d", id),
+		Path:    viper.GetString("basePath"),
 	}
 	weibo.Start()
 }
