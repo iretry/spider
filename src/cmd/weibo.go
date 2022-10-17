@@ -39,6 +39,7 @@ func init() {
 }
 
 func startWeibo() {
+
 	id, err := strconv.ParseUint(uid, 10, 64)
 	if err != nil {
 		fmt.Println("err:", err)
@@ -53,6 +54,7 @@ func startWeibo() {
 		Path:    viper.GetString("basePath"),
 	}
 	weibo.Start()
+
 }
 
 func weiboMain() {
