@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"spider/services"
 	"strconv"
 	"strings"
 	"time"
@@ -346,7 +347,14 @@ func (p Weibo) ParseJson(content io.Reader) int {
 						Text:  msg,
 					},
 				}
+
 				postInfo.SamplePost()
+				_, err = services.NewQiniu().Upload(path, "spider/weibo/"+shotDir+shotFileName)
+				if err != nil {
+					fmt.Println("upload fail", err)
+					return 0
+				}
+
 			}
 			cacheInfo, err := json.Marshal(latestMid)
 			if err != nil {
